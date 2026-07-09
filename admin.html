@@ -81,6 +81,16 @@
         </table>
       </div>
     </div>
+
+    <!-- Données -->
+    <div class="card">
+      <h2>💾 Données</h2>
+      <p class="muted">
+        Les données sont enregistrées uniquement dans ce navigateur (localStorage).
+        La réinitialisation efface tous les pointages et remet les horaires par défaut.
+      </p>
+      <button class="red" id="resetBtn">Réinitialiser toutes les données</button>
+    </div>
   </div>
 
   <script src="common.js"></script>
@@ -252,6 +262,15 @@
     }
 
     document.getElementById('filterBtn').addEventListener('click', loadAll);
+
+    /* ---------- Réinitialisation ---------- */
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      if (confirm('Effacer TOUTES les données et repartir de zéro ?')) {
+        resetDB();
+        loadSchedules();
+        refreshAll();
+      }
+    });
 
     /* ---------- Rafraîchissement global ---------- */
     function refreshAll() {

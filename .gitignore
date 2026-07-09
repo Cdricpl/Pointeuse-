@@ -1,6 +1,3 @@
-node_modules/
-# Base de données locale : on garde le dossier data/ mais pas les données réelles.
-# Décommentez la ligne suivante pour ne pas versionner la base :
-# data/db.json
-*.log
 .DS_Store
+*.log
+node_modules/

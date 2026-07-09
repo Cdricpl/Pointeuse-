@@ -1,26 +1,40 @@
 # 🕒 Pointeuse — École des devoirs
 
-Application web simple de **pointeuse** pour **2 employées** avec un **accès administrateur**.
-Elle gère les horaires imposés, la justification des heures effectuées hors horaire,
-la validation par l'admin (heures supplémentaires / récupérations) et des statistiques.
+Application web de **pointeuse** pour **2 employées** avec un **accès administrateur** :
+horaires imposés, justification des heures effectuées hors horaire, validation par
+l'admin (heures supplémentaires / récupérations) et statistiques.
 
-Aucune dépendance, aucun framework lourd : uniquement **Node.js** (modules natifs) et
-un stockage **JSON**. Fonctionne dès le premier lancement.
+**Version 100 % navigateur** : aucune installation, aucun serveur. Les données sont
+enregistrées dans le navigateur (`localStorage`). Fonctionne en ligne sur **GitHub Pages**
+ou simplement en ouvrant `index.html`.
 
 ---
 
-## 🚀 Lancer l'application
+## 🌐 Utiliser en ligne (GitHub Pages)
 
-Pré-requis : avoir **Node.js** installé (version 16 ou plus récente).
+Une fois GitHub Pages activé, l'application est accessible à une adresse du type :
 
-```bash
-node server.js
+```
+https://cdricpl.github.io/Pointeuse-/
 ```
 
-Puis ouvrir dans le navigateur : **http://localhost:3000**
+### Activer / vérifier GitHub Pages
+1. Dépôt GitHub → **Settings** → **Pages**.
+2. **Source** : `Deploy from a branch`.
+3. **Branch** : `main` · dossier `/ (root)` → **Save**.
+4. Attendre ~1 minute puis ouvrir l'adresse affichée.
 
-> Aucune installation (`npm install`) n'est nécessaire : le serveur n'utilise que
-> les modules livrés avec Node.js.
+> ⚠️ Les fichiers de l'application doivent être **à la racine** du dépôt
+> (c'est le cas ici : `index.html` est à la racine, pas dans un sous-dossier).
+> Assure-toi que la branche choisie dans Pages contient bien ces fichiers
+> (fusionne la Pull Request dans `main`, ou sélectionne la branche concernée).
+
+---
+
+## 💻 Utiliser hors ligne (sans internet)
+
+Télécharge le dépôt (bouton vert **Code → Download ZIP**), décompresse-le,
+puis **double-clique sur `index.html`**. L'application s'ouvre dans ton navigateur.
 
 ---
 
@@ -32,103 +46,77 @@ Puis ouvrir dans le navigateur : **http://localhost:3000**
 | Employée 2  | Employée  | `2222`   |
 | Admin       | Admin     | `0000`   |
 
-Les comptes et PIN sont définis dans `data/db.json` (créé automatiquement au
-premier lancement). Vous pouvez y modifier les noms ou les PIN.
-
 ---
 
-## 🧭 Les 3 pages
+## ⚠️ Important : où sont stockées les données ?
 
-1. **Connexion** (`index.html`) — choix du compte + code PIN.
-2. **Espace employée** (`employee.html`) — pointeuse + horaire imposé + historique.
-3. **Espace admin** (`admin.html`) — horaires, validations, statistiques, tous les pointages.
+Les données (pointages, horaires) sont enregistrées **dans le navigateur utilisé**
+(`localStorage`). Conséquences :
+
+- Les données **ne sont pas partagées** entre plusieurs ordinateurs / téléphones.
+- Si l'Employée 1 pointe sur son téléphone, l'Admin sur un autre appareil **ne verra pas**
+  ces pointages.
+- Vider les données du navigateur efface aussi les pointages.
+
+👉 Cette version convient bien si **tout le monde utilise le même ordinateur / navigateur**
+(ex. l'ordinateur de l'école). Pour un vrai partage entre appareils, il faut la version
+avec serveur (voir la section plus bas).
 
 ---
 
 ## ✨ Fonctionnalités
 
 ### Pour les employées
-- **▶️ Commencer le travail** : enregistre l'heure d'arrivée.
-- **⏹️ Terminer le travail** : enregistre l'heure de départ.
+- **▶️ Commencer le travail** / **⏹️ Terminer le travail**.
 - Récapitulatif **du jour** et **de la semaine**.
-- Historique personnel en lecture seule : **une employée ne peut jamais modifier ses heures**.
+- Historique personnel **en lecture seule** : une employée ne peut jamais modifier ses heures.
 
 ### Horaires imposés (définis par l'admin)
-- Heure de **début** et de **fin** (ex. 14h–18h).
-- **Jours obligatoires** de présence.
+- Heure de **début** / **fin** (ex. 14h–18h) et **jours obligatoires**.
 - Les employées **voient** leur horaire mais ne peuvent pas le changer.
 
 ### Justification automatique des écarts
-Quand une employée pointe **en dehors de l'horaire imposé** (arrivée en avance,
-départ en retard, ou travail un jour non prévu) et que l'écart dépasse **5 minutes** :
-1. L'application **calcule automatiquement l'écart** (en minutes).
-2. Elle **exige une justification** (champ texte obligatoire).
+Quand une employée pointe **en dehors de l'horaire imposé** (arrivée en avance, départ en
+retard, ou jour non prévu) et que l'écart dépasse **5 minutes** :
+1. L'écart est **calculé automatiquement**.
+2. Une **justification** est **obligatoire**.
 3. Le pointage passe **« En attente de validation Admin »**.
 
-### Validation par l'admin
-L'admin peut, pour chaque justification en attente :
-- **Valider** ou **refuser**.
-- Classer l'écart validé en **Heures supplémentaires** ou **Récupération**.
+### Espace admin
+- Vue **globale** des pointages, avec **filtres** (employée, période).
+- **Justifications en attente** : valider / refuser + classer en **Heures supplémentaires**
+  ou **Récupération**.
+- **Statistiques** par employée (heures prestées, heures sup., récupérations).
+- Bouton **Réinitialiser les données**.
 
-### Tableau de bord admin
-- Vue **globale** des pointages des deux employées, avec **filtres** (employée, période).
-- Liste des **justifications en attente**.
-- **Statistiques** par employée : total heures prestées, heures supplémentaires, récupérations.
+---
+
+## 🗂️ Fichiers
+
+```
+Pointeuse-/
+├── index.html      # Page de connexion
+├── employee.html   # Espace employée (pointeuse + historique)
+├── admin.html      # Espace admin (horaires + validations + stats)
+├── common.js       # Données locales (localStorage) + logique + formatage
+├── style.css       # Feuille de style
+└── README.md
+```
 
 ---
 
 ## 🔐 Règles de sécurité
 
-- Les employées **ne peuvent jamais modifier leurs heures** (aucune route API ne le permet côté employée).
+- Les employées **ne peuvent jamais modifier leurs heures** (aucune action ne le permet).
 - Seul l'**admin** peut : modifier les horaires, valider/refuser les justifications,
-  et corriger un pointage (`/api/admin/edit-punch`).
-- Chaque appel API vérifie le **jeton de session** et le **rôle**.
+  réinitialiser les données.
 
 ---
 
-## 🗂️ Architecture du projet
+## 🔁 Besoin d'un vrai partage entre appareils ?
 
-```
-Pointeuse-/
-├── server.js            # Serveur HTTP + API (Node natif, aucune dépendance)
-├── package.json         # Script "start" (optionnel : npm start)
-├── data/
-│   └── db.json          # Base de données JSON (créée au 1er lancement)
-├── public/
-│   ├── index.html       # Page de connexion
-│   ├── employee.html    # Espace employée (pointeuse + historique)
-│   ├── admin.html       # Espace admin (horaires + validations + stats)
-│   ├── common.js        # Fonctions partagées (API, session, formatage)
-│   └── style.css        # Feuille de style commune
-└── README.md
-```
-
-### Pourquoi ce choix technique ?
-- **Node.js natif + JSON** : aucun `npm install`, aucun serveur de base de données à
-  configurer. C'est le plus simple à installer et à maintenir pour 2 employées.
-- Le stockage JSON (`data/db.json`) est lisible et modifiable à la main si besoin.
-- Si un jour le volume grandit, on pourra remplacer le fichier JSON par SQLite sans
-  changer le reste de l'application (l'API resterait identique).
-
----
-
-## 🧪 Démonstration rapide
-
-1. Lancer `node server.js` et ouvrir http://localhost:3000.
-2. **Connexion Employée 1** (PIN `1111`) → cliquer **Commencer le travail**, puis
-   **Terminer le travail**. Si vous pointez pendant l'horaire imposé, c'est « Normal ».
-3. Pour tester une **heure supplémentaire** : l'admin peut d'abord fixer un horaire court
-   (ex. 14h–15h) pour l'Employée 1 ; en pointant plus longtemps, l'application demandera
-   une **justification** et le pointage passera « En attente ».
-4. **Connexion Admin** (PIN `0000`) → onglet **Justifications en attente** :
-   choisir « Heures supplémentaires » ou « Récupération » puis **Valider**.
-5. Les **statistiques** de l'admin se mettent à jour automatiquement.
-
----
-
-## ⚙️ Notes
-
-- Le port peut être changé : `PORT=8080 node server.js`.
-- Les sessions sont gardées en mémoire : après un redémarrage du serveur,
-  il suffit de se reconnecter.
-- Pour repartir de zéro, supprimez le fichier `data/db.json` (il sera recréé).
+Cette version (localStorage) est locale à chaque navigateur. Si tu as besoin que les deux
+employées et l'admin partagent **les mêmes données depuis des appareils différents**, il
+faut une version **avec serveur** (base de données commune). Cette version existe dans
+l'historique Git du projet (serveur Node.js) et peut être hébergée sur un service qui
+exécute Node (Render, Railway, etc.). Dis-le si tu veux que je la remette en place.
