@@ -114,7 +114,36 @@ tr.weekend td { background:#fafbfc; color:#adb5bd; }
 #loadbar { position:fixed; top:0; left:0; height:3px; width:0; background:var(--primary); z-index:100; transition:width .2s ease; opacity:0; }
 #loadbar.on { width:80%; opacity:1; transition:width 1.2s ease; }
 
+/* Statistique annuelle mise en avant */
+.hero-stat { text-align:center; padding:22px 16px; border-radius:14px;
+  background:linear-gradient(135deg,#eef3ff,#e9f9ee); border:1px solid var(--border); }
+.hero-stat .big { font-size:56px; font-weight:800; line-height:1; color:var(--primary); }
+.hero-stat .lbl2 { font-size:16px; margin-top:8px; }
+
+/* ---------- Lisibilité smartphone ---------- */
 @media (max-width:600px) {
-  .container { padding:0 8px; } .card { padding:14px; }
-  .brand { font-size:15px; }
+  html { -webkit-text-size-adjust:100%; }
+  body { font-size:16px; }
+  .container { padding:0 8px; margin:14px auto; }
+  .card { padding:14px; border-radius:10px; }
+  .topbar { padding:12px 14px; }
+  .brand { font-size:15px; gap:8px; }
+  .brand .logo-header { height:30px; }
+  .who { display:none; }                 /* gagne de la place ; le rôle reste via la couleur */
+  /* Navigation : onglets défilables horizontalement, cibles tactiles larges */
+  .nav { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; padding:8px; gap:6px; }
+  .navbtn { white-space:nowrap; padding:10px 12px; font-size:14px; }
+  /* Champs plus grands au doigt */
+  input, select, button { min-height:42px; font-size:16px; }
+  button.small { min-height:38px; }
+  .grid input.cell, .grid select.cell { min-height:38px; font-size:15px; }
+  .grid select.cell.time { width:96px; }
+  th, td { padding:8px; }
+  /* Tuiles de stats : 2 colonnes lisibles */
+  .stat-grid { grid-template-columns:repeat(2,1fr); }
+  .stat .num { font-size:20px; }
+  .hero-stat .big { font-size:64px; }
+  .toolbar { gap:8px; }
+  .toolbar select { flex:1; min-width:0; }
+  .row > div { min-width:calc(50% - 6px); }
 }
