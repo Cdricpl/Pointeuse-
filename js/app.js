@@ -662,70 +662,59 @@ async function viewChildren() {
 async function viewStats() {
   const app = document.getElementById('app');
   const all = await STORE.allChildren();
-  // Moyennes
-  const inMonth = all.filter((c) => c.entry_date.startsWith(`${CUR.y}-${pad(CUR.m)}`));
-  const inYear = all.filter((c) => c.entry_date.startsWith(`${CUR.y}-`));
-  const avg = (arr) => arr.length ? (arr.reduce((s, c) => s + Number(c.children || 0), 0) / arr.length) : 0;
-  // Moyenne hebdo : moyenne des totaux par semaine ISO du mois
-  const weeks = {};
-  inMonth.forEach((c) => { const wk = isoWeek(c.entry_date); weeks[wk] = (weeks[wk] || 0) + Number(c.children || 0); });
-  const weekVals = Object.values(weeks);
-  const weeklyAvg = weekVals.length ? weekVals.reduce((a, b) => a + b, 0) / weekVals.length : 0;
-
+  const inYear = all.filter((c) => (c.entry_date || '').startsWith(`${CUR.y}-`));
   const annualTotal = inYear.reduce((s, c) => s + (Number(c.children) || 0), 0);
-  const stats = {
-    weeklyAvg: weeklyAvg, dailyMonth: avg(inMonth), dailyYear: avg(inYear),
-    annualTotal, annualDays: inYear.length, year: CUR.y,
-  };
+  const dailyYear = inYear.length ? annualTotal / inYear.length : 0;
+
+  // Détail mois par mois (moyenne / total / jours encodés).
+  const months = [];
+  for (let mm = 1; mm <= 12; mm++) {
+    const arr = inYear.filter((c) => c.entry_date.startsWith(`${CUR.y}-${pad(mm)}`));
+    const tot = arr.reduce((s, c) => s + (Number(c.children) || 0), 0);
+    months.push({
+      short: new Date(CUR.y, mm - 1, 1).toLocaleDateString('fr-FR', { month: 'short' }),
+      long: new Date(CUR.y, mm - 1, 1).toLocaleDateString('fr-FR', { month: 'long' }),
+      days: arr.length, total: tot, avg: arr.length ? tot / arr.length : 0,
+    });
+  }
+  const stats = { dailyYear, annualTotal, annualDays: inYear.length, year: CUR.y };
 
   app.innerHTML = `${await toolbar(false)}
     <div class="card">
       <div class="row-between">
-        <h2 style="margin:0">📈 Statistiques de fréquentation</h2>
-        <button class="small" id="statsPdfBtn">🖨️ Export PDF annuel</button>
+        <h2 style="margin:0">📈 Statistiques — année ${CUR.y}</h2>
+        <button class="small" id="statsPdfBtn">🖨️ Export PDF</button>
       </div>
-      <div class="stat-grid" style="margin:16px 0">
-        <div class="stat"><div class="num">${weeklyAvg.toFixed(0)}</div><div class="lbl">Moyenne hebdomadaire (mois)</div></div>
-        <div class="stat"><div class="num">${avg(inMonth).toFixed(1)}</div><div class="lbl">Moyenne journalière (mois)</div></div>
-        <div class="stat"><div class="num">${avg(inYear).toFixed(1)}</div><div class="lbl">Moyenne journalière (année)</div></div>
+      <div class="hero-stat">
+        <div class="big">${dailyYear.toFixed(1)}</div>
+        <div class="lbl2">enfants en moyenne <strong>par jour</strong> sur l'année ${CUR.y}</div>
+        <div class="muted small">${annualTotal} enfants encodés · ${inYear.length} jour(s) avec encodage</div>
       </div>
-      <h3 class="muted">Enfants présents par jour — ${monthName(CUR.y, CUR.m)}</h3>
-      <canvas id="chartDaily" height="110"></canvas>
-      <h3 class="muted" style="margin-top:24px">Moyenne mensuelle — ${CUR.y}</h3>
-      <canvas id="chartMonthly" height="110"></canvas>
+      <h3 class="muted" style="margin-top:22px">Moyenne d'enfants par jour, mois par mois</h3>
+      <canvas id="chartMonthly" height="130"></canvas>
+      <div class="table-wrap" style="margin-top:14px"><table>
+        <thead><tr><th>Mois</th><th>Moyenne / jour</th><th>Total</th><th>Jours</th></tr></thead>
+        <tbody>${months.map((m) => `<tr>
+          <td style="text-transform:capitalize">${m.long}</td>
+          <td><strong>${m.avg ? m.avg.toFixed(1) : '—'}</strong></td>
+          <td>${m.total || '—'}</td><td>${m.days || '—'}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <p class="muted small" style="margin-top:10px">Encodez les présences dans l'onglet 🧒 <strong>Enfants</strong> ; la moyenne annuelle se met à jour automatiquement.</p>
     </div>`;
   wireToolbar();
 
   if (!window.Chart) {
-    document.getElementById('chartDaily').replaceWith(Object.assign(document.createElement('p'), { className: 'muted', textContent: 'Graphiques indisponibles hors ligne (Chart.js).' }));
+    const c = document.getElementById('chartMonthly');
+    if (c) c.replaceWith(Object.assign(document.createElement('p'), { className: 'muted small', textContent: 'Graphique indisponible hors ligne — voir le tableau ci-dessous.' }));
     document.getElementById('statsPdfBtn').onclick = () => exportStatsPDF(stats, null, null);
     return;
   }
-
-  // Histogramme journalier
-  const dim = daysInMonth(CUR.y, CUR.m);
-  const labels = [], data = [];
-  const byDate = {}; inMonth.forEach((c) => (byDate[c.entry_date] = Number(c.children || 0)));
-  for (let d = 1; d <= dim; d++) { labels.push(pad(d)); data.push(byDate[`${CUR.y}-${pad(CUR.m)}-${pad(d)}`] || 0); }
-  const chartDaily = new Chart(document.getElementById('chartDaily'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'Enfants', data, backgroundColor: '#3b5bdb' }] },
-    options: { animation: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
-  });
-  // Courbe moyenne mensuelle sur l'année
-  const mLabels = [], mData = [];
-  for (let mm = 1; mm <= 12; mm++) {
-    const arr = inYear.filter((c) => c.entry_date.startsWith(`${CUR.y}-${pad(mm)}`));
-    mLabels.push(new Date(CUR.y, mm - 1, 1).toLocaleDateString('fr-FR', { month: 'short' }));
-    mData.push(arr.length ? +(arr.reduce((s, c) => s + Number(c.children || 0), 0) / arr.length).toFixed(1) : 0);
-  }
   const chartMonthly = new Chart(document.getElementById('chartMonthly'), {
-    type: 'line',
-    data: { labels: mLabels, datasets: [{ label: 'Moyenne/jour', data: mData, borderColor: '#2f9e44', tension: 0.3, fill: false }] },
+    type: 'bar',
+    data: { labels: months.map((m) => m.short), datasets: [{ label: 'Moyenne/jour', data: months.map((m) => +m.avg.toFixed(1)), backgroundColor: '#2f9e44' }] },
     options: { animation: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
   });
-
-  document.getElementById('statsPdfBtn').onclick = () => exportStatsPDF(stats, chartDaily, chartMonthly);
+  document.getElementById('statsPdfBtn').onclick = () => exportStatsPDF(stats, null, chartMonthly);
 }
 
 /* ---------------- Export PDF des statistiques ANNUELLES ---------------- */
@@ -766,13 +755,6 @@ async function exportStatsPDF(stats, chartDaily, chartMonthly) {
     doc.addImage(chartMonthly.toBase64Image('image/png', 1), 'PNG', 14, y, 180, 180 * 0.42);
   }
   doc.save(`statistiques_annuelles_${stats.year}.pdf`);
-}
-function isoWeek(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d); const day = (date.getDay() + 6) % 7;
-  date.setDate(date.getDate() - day + 3);
-  const first = new Date(date.getFullYear(), 0, 4);
-  return 1 + Math.round(((date - first) / 864e5 - 3 + ((first.getDay() + 6) % 7)) / 7);
 }
 
 /* ---------------- Vue : Utilisateurs (admin) ---------------- */

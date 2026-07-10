@@ -13,6 +13,14 @@ plusieurs appareils via le cloud.
 
 ---
 
+## 📱 Installer sur smartphone (application)
+
+L'app est une **PWA** : on peut l'installer comme une vraie application.
+- **Android (Chrome)** : ouvre le site → menu ⋮ → **« Installer l'application »** (ou « Ajouter à l'écran d'accueil »).
+- **iPhone (Safari)** : ouvre le site → bouton **Partager** → **« Sur l'écran d'accueil »**.
+
+Une icône « Jardin Sauvage » 🌳 apparaît ; l'app s'ouvre en plein écran, sans barre du navigateur.
+
 ## 🚀 Essayer immédiatement (mode démo)
 
 Ouvre simplement `index.html` (ou visite le site GitHub Pages). Comptes de test :

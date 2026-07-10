@@ -2,9 +2,17 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>EDD Jardin Sauvage — Gestion</title>
   <link rel="stylesheet" href="css/styles.css" />
+  <!-- PWA : installable sur smartphone -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#1e5bd6" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Jardin Sauvage" />
+  <meta name="mobile-web-app-capable" content="yes" />
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -41,5 +49,14 @@
   <script src="js/config.js"></script>
   <script src="js/store.js"></script>
   <script src="js/app.js"></script>
+
+  <!-- Enregistrement du service worker (installation sur smartphone + hors ligne) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW non enregistré', e));
+      });
+    }
+  </script>
 </body>
 </html>

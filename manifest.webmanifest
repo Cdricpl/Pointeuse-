@@ -1,0 +1,16 @@
+{
+  "name": "EDD Jardin Sauvage",
+  "short_name": "Jardin Sauvage",
+  "description": "Gestion des horaires, prestations et présences — École des devoirs.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f2ea",
+  "theme_color": "#1e5bd6",
+  "lang": "fr",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
