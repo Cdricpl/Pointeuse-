@@ -138,6 +138,11 @@ class DemoStore {
     const p = db.profiles.find(x => x.id === id);
     if (p) { p.active = active; this._log(db, active ? 'reactivate_employee' : 'archive_employee', 'profile', id, { full_name: p.full_name }); this._save(db); }
   }
+  async setRole(id, role) {
+    const db = this._db();
+    const p = db.profiles.find(x => x.id === id);
+    if (p) { p.role = role; this._log(db, 'set_role', 'profile', id, { role }); this._save(db); }
+  }
 
   /* ---- Mois ---- */
   async getMonth(employee_id, year, month) {
@@ -251,6 +256,11 @@ class SupabaseStore {
     const { error } = await this.sb.from('profiles').update({ active }).eq('id', id);
     if (error) throw error;
     await this._audit(active ? 'reactivate_employee' : 'archive_employee', 'profile', id, {});
+  }
+  async setRole(id, role) {
+    const { error } = await this.sb.from('profiles').update({ role }).eq('id', id);
+    if (error) throw new Error(error.message);
+    await this._audit('set_role', 'profile', id, { role });
   }
 
   async getMonth(employee_id, year, month) {
