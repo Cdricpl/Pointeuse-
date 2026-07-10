@@ -52,16 +52,14 @@ class DemoStore {
         { id: e1,      full_name: 'Employée 1',  email: 'flora@ecole.be', password: 'flora123', role: 'employee', active: true },
         { id: e2,      full_name: 'Employée 2',  email: 'sarah@ecole.be', password: 'sarah123', role: 'employee', active: true },
       ],
-      months: [],       // { employee_id, year, month, status, carry_in_minutes }
-      entries: [],      // { id, employee_id, entry_date, planned_minutes, worked_minutes, kind, justification }
-      children: [],     // (ancien) présences agrégées par jour — déprécié
+      months: [],       // { employee_id, year, month, status }
+      entries: [],      // { id, employee_id, entry_date, planned_*, start_time, end_time, worked_minutes, justification }
       kids: [           // liste nominative des enfants
         { id: 'k1', first_name: 'Lucas', last_name: 'Martin', active: true },
         { id: 'k2', first_name: 'Emma', last_name: 'Bernard', active: true },
         { id: 'k3', first_name: 'Noah', last_name: 'Dubois', active: true },
       ],
       kidatt: [],       // présences : { kid_id, entry_date }
-      audit: [],        // { id, actor_name, action, entity, entity_id, details, created_at }
       // Horaire type hebdomadaire par employée : slots[weekday] = {start,end} (0=Dim..6=Sam)
       templates: [
         { employee_id: e1, slots: { 1: { start: '14:00', end: '18:00' }, 2: { start: '14:00', end: '18:00' }, 3: { start: '14:00', end: '18:00' }, 4: { start: '14:00', end: '18:00' }, 5: { start: '14:00', end: '18:00' } } },
@@ -89,8 +87,7 @@ class DemoStore {
           id: Util.uuid(), employee_id: emp, entry_date: date,
           planned_start: pStart, planned_end: pEnd, planned_minutes: planned,
           start_time: start, end_time: end, worked_minutes: worked,
-          break_minutes: 0, worked_touched: touched,
-          kind: 'normal',
+          worked_touched: touched,
           justification: touched ? 'Activité prolongée' : '',
         });
       });
@@ -107,15 +104,6 @@ class DemoStore {
     localStorage.setItem(this.KEY, JSON.stringify(db));
     // Notifie les autres onglets (simulation "temps réel").
     localStorage.setItem('ecole_ping', String(Date.now()));
-  }
-  _log(db, action, entity, entity_id, details) {
-    const s = this._session();
-    db.audit.unshift({
-      id: Util.uuid(), actor_name: s ? s.full_name : '?',
-      action, entity, entity_id, details: details || {},
-      created_at: new Date().toISOString(),
-    });
-    db.audit = db.audit.slice(0, 500);
   }
   _session() { try { return JSON.parse(localStorage.getItem(this.SESSION) || 'null'); } catch { return null; } }
 
@@ -143,14 +131,13 @@ class DemoStore {
     if (db.profiles.some(p => p.email === email)) throw new Error('Cet email existe déjà.');
     const prof = { id: Util.uuid(), full_name, email, password: password || 'changeme', role: role || 'employee', active: true };
     db.profiles.push(prof);
-    this._log(db, 'add_employee', 'profile', prof.id, { full_name });
     this._save(db);
     return prof;
   }
   async setActive(id, active) {
     const db = this._db();
     const p = db.profiles.find(x => x.id === id);
-    if (p) { p.active = active; this._log(db, active ? 'reactivate_employee' : 'archive_employee', 'profile', id, { full_name: p.full_name }); this._save(db); }
+    if (p) { p.active = active; this._save(db); }
   }
 
   /* ---- Horaire type ---- */
@@ -165,7 +152,6 @@ class DemoStore {
     let t = db.templates.find(x => x.employee_id === employee_id);
     if (!t) { t = { employee_id, slots }; db.templates.push(t); }
     t.slots = slots;
-    this._log(db, 'set_template', 'template', employee_id, {});
     this._save(db);
   }
 
@@ -176,7 +162,7 @@ class DemoStore {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Adresse email invalide.');
     if (db.profiles.some(p => p.email === email && p.id !== id)) throw new Error('Cet email est déjà utilisé.');
     const p = db.profiles.find(x => x.id === id);
-    if (p) { p.email = email; this._log(db, 'set_email', 'profile', id, { email }); this._save(db); }
+    if (p) { p.email = email; this._save(db); }
   }
   async sendPasswordReset(email) {
     // Pas d'envoi d'email possible en mode démo.
@@ -186,16 +172,13 @@ class DemoStore {
   /* ---- Mois ---- */
   async getMonth(employee_id, year, month) {
     return this._db().months.find(x => x.employee_id === employee_id && x.year === year && x.month === month)
-      || { employee_id, year, month, status: 'open', carry_in_minutes: 0 };
+      || { employee_id, year, month, status: 'open' };
   }
   async setMonthStatus(employee_id, year, month, status) {
     const db = this._db();
     let mo = db.months.find(x => x.employee_id === employee_id && x.year === year && x.month === month);
-    if (!mo) { mo = { employee_id, year, month, status: 'open', carry_in_minutes: 0 }; db.months.push(mo); }
+    if (!mo) { mo = { employee_id, year, month, status: 'open' }; db.months.push(mo); }
     mo.status = status;
-    if (status === 'locked') mo.locked_at = new Date().toISOString();
-    this._log(db, status === 'locked' ? 'lock_month' : status === 'validated' ? 'validate_month' : 'unlock_month',
-      'month', Util.monthKey(year, month), { employee_id });
     this._save(db);
     return mo;
   }
@@ -208,23 +191,32 @@ class DemoStore {
   async entriesForEmployee(employee_id) {
     return this._db().entries.filter(e => e.employee_id === employee_id);
   }
-  async upsertEntry(entry) {
-    const db = this._db();
+  _applyEntry(db, entry) {
     let e = db.entries.find(x => x.employee_id === entry.employee_id && x.entry_date === entry.entry_date);
     if (!e) {
       e = { id: Util.uuid(), employee_id: entry.employee_id, entry_date: entry.entry_date,
             planned_start: '', planned_end: '', planned_minutes: 0, worked_minutes: 0,
-            start_time: '', end_time: '', break_minutes: 0, worked_touched: false,
-            kind: 'normal', justification: '' };
+            start_time: '', end_time: '', worked_touched: false, justification: '' };
       db.entries.push(e);
     }
     ['planned_start', 'planned_end', 'planned_minutes', 'worked_minutes', 'start_time',
-     'end_time', 'break_minutes', 'worked_touched', 'kind', 'justification'].forEach(k => {
+     'end_time', 'worked_touched', 'justification'].forEach(k => {
       if (entry[k] !== undefined) e[k] = entry[k];
     });
-    this._log(db, 'update_entry', 'day_entry', e.entry_date, { employee_id: entry.employee_id });
+    return e;
+  }
+  async upsertEntry(entry) {
+    const db = this._db();
+    const e = this._applyEntry(db, entry);
     this._save(db);
     return e;
+  }
+  // Écriture groupée (un seul enregistrement) — utilisé par le pré-remplissage.
+  async upsertEntries(entries) {
+    const db = this._db();
+    const out = (entries || []).map((entry) => this._applyEntry(db, entry));
+    this._save(db);
+    return out;
   }
 
   /* ---- Enfants (liste nominative + présences) ---- */
@@ -260,6 +252,34 @@ class DemoStore {
     const byDate = {};
     this._db().kidatt.forEach(a => { byDate[a.entry_date] = (byDate[a.entry_date] || 0) + 1; });
     return Object.entries(byDate).map(([entry_date, children]) => ({ entry_date, children }));
+  }
+
+  /* ---- RGPD : rétention / anonymisation ---- */
+  // Supprime les présences enfants strictement antérieures à `beforeISO` (AAAA-MM-JJ).
+  async purgeKidAttendanceBefore(beforeISO) {
+    const db = this._db();
+    const before = db.kidatt.length;
+    db.kidatt = db.kidatt.filter(a => a.entry_date >= beforeISO);
+    this._save(db);
+    return before - db.kidatt.length;
+  }
+  // Anonymise un enfant (remplace nom/prénom) tout en conservant ses présences comptées.
+  async anonymizeKid(id) {
+    const db = this._db();
+    const k = db.kids.find(x => x.id === id);
+    if (k) { k.first_name = 'Enfant'; k.last_name = '#' + String(id).slice(0, 6); k.active = false; this._save(db); }
+  }
+
+  /* ---- Export / sauvegarde ---- */
+  async exportAll() {
+    const db = this._db();
+    return {
+      exported_at: new Date().toISOString(), mode: 'demo',
+      profiles: (db.profiles || []).map(({ password, ...p }) => p), // jamais les mots de passe
+      months: db.months || [], day_entries: db.entries || [],
+      schedule_templates: db.templates || [],
+      kids: db.kids || [], kid_attendance: db.kidatt || [],
+    };
   }
 
   /* ---- Temps réel (autres onglets) ---- */
@@ -343,7 +363,7 @@ class SupabaseStore {
   async getMonth(employee_id, year, month) {
     const { data } = await this.sb.from('months').select('*')
       .eq('employee_id', employee_id).eq('year', year).eq('month', month).maybeSingle();
-    return data || { employee_id, year, month, status: 'open', carry_in_minutes: 0 };
+    return data || { employee_id, year, month, status: 'open' };
   }
   async setMonthStatus(employee_id, year, month, status) {
     const patch = { employee_id, year, month, status };
@@ -380,6 +400,22 @@ class SupabaseStore {
       if (i >= 0) list[i] = data; else list.push(data);
     }
     return data;
+  }
+  // Écriture groupée (un seul aller-retour réseau) — utilisée par le pré-remplissage.
+  async upsertEntries(entries) {
+    if (!entries || !entries.length) return [];
+    const { data, error } = await this.sb.from('day_entries')
+      .upsert(entries, { onConflict: 'employee_id,entry_date' }).select();
+    if (error) throw new Error(error.message);
+    // Met à jour le cache local d'un coup.
+    (data || []).forEach((row) => {
+      const list = this._entriesCache[row.employee_id];
+      if (list) {
+        const i = list.findIndex((e) => e.entry_date === row.entry_date);
+        if (i >= 0) list[i] = row; else list.push(row);
+      }
+    });
+    return data || [];
   }
 
   /* ---- Enfants (liste nominative + présences) ---- */
@@ -425,6 +461,35 @@ class SupabaseStore {
     const byDate = {};
     (data || []).forEach((a) => { byDate[a.entry_date] = (byDate[a.entry_date] || 0) + 1; });
     return Object.entries(byDate).map(([entry_date, children]) => ({ entry_date, children }));
+  }
+
+  /* ---- RGPD : rétention / anonymisation ---- */
+  async purgeKidAttendanceBefore(beforeISO) {
+    const { data, error } = await this.sb.from('kid_attendance')
+      .delete().lt('entry_date', beforeISO).select('kid_id');
+    if (error) throw new Error(error.message);
+    return (data || []).length;
+  }
+  async anonymizeKid(id) {
+    const { error } = await this.sb.from('kids')
+      .update({ first_name: 'Enfant', last_name: '#' + String(id).slice(0, 6), active: false }).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  /* ---- Export / sauvegarde ---- */
+  async exportAll() {
+    const pick = async (table, cols = '*') => {
+      const { data, error } = await this.sb.from(table).select(cols);
+      if (error) throw new Error(`${table} : ${error.message}`);
+      return data || [];
+    };
+    const [profiles, months, day_entries, schedule_templates, kids, kid_attendance] = await Promise.all([
+      pick('profiles', 'id,full_name,email,role,active,created_at'), // pas de secret : les mots de passe sont gérés par Supabase Auth
+      pick('months'), pick('day_entries'), pick('schedule_templates'),
+      pick('kids'), pick('kid_attendance'),
+    ]);
+    return { exported_at: new Date().toISOString(), mode: 'cloud',
+      profiles, months, day_entries, schedule_templates, kids, kid_attendance };
   }
 
   onChange(cb) {

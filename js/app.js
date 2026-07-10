@@ -61,6 +61,24 @@ function toast(msg, kind = 'ok') {
   clearTimeout(t._t); t._t = setTimeout(() => (t.style.display = 'none'), 3000);
 }
 
+/* ---------------- Téléchargement de fichiers (sans dépendance) ---------------- */
+function downloadFile(filename, content, type) {
+  const blob = new Blob([content], { type: type || 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// Transforme un tableau de lignes (tableaux) en CSV (séparateur « ; » pour Excel FR).
+function toCSV(rows) {
+  const esc = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n'); // BOM = accents OK dans Excel
+}
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+
 /* ---------------- Calculs mensuels + solde reporté ---------------- */
 async function monthSummary(empId, y, m) {
   const all = await STORE.entriesForEmployee(empId);
@@ -254,7 +272,7 @@ async function viewSheet() {
   for (let d = 1; d <= dim; d++) {
     const date = `${CUR.y}-${pad(CUR.m)}-${pad(d)}`;
     const dow = new Date(CUR.y, CUR.m - 1, d).getDay();
-    const e = byDate[date] || { planned_start: '', planned_end: '', start_time: '', end_time: '', worked_touched: false, kind: 'normal', justification: '' };
+    const e = byDate[date] || { planned_start: '', planned_end: '', start_time: '', end_time: '', worked_touched: false, justification: '' };
     const planned = plannedMinutes(e);
     const worked = effectiveWorked(e);
     const delta = worked - planned;
@@ -529,6 +547,8 @@ async function applyTemplate(empId, y, m, slots, silent) {
   const existing = {};
   (await STORE.entriesForMonth(empId, y, m)).forEach((e) => (existing[e.entry_date] = e));
   const dim = daysInMonth(y, m);
+  // On construit tous les jours à écrire puis on les envoie en UN SEUL lot (rapide, moins de latence).
+  const patches = [];
   for (let d = 1; d <= dim; d++) {
     const w = new Date(y, m - 1, d).getDay();
     const slot = slots[w];
@@ -538,8 +558,9 @@ async function applyTemplate(empId, y, m, slots, silent) {
     const ex = existing[date] || {};
     const patch = { employee_id: empId, entry_date: date, planned_start: slot.start, planned_end: slot.end, planned_minutes: dur };
     if (!ex.worked_touched) { patch.start_time = slot.start; patch.end_time = slot.end; patch.worked_minutes = dur; }
-    await STORE.upsertEntry(patch);
+    patches.push(patch);
   }
+  if (patches.length) await STORE.upsertEntries(patches);
   if (!silent) { toast('Horaire type appliqué au mois'); render(); }
 }
 
@@ -588,17 +609,19 @@ async function viewChildren() {
 
   // En-têtes des jours (numéro + initiale du jour).
   const headDays = days.map((day) =>
-    `<th class="daycol${day.weekend ? ' weekend' : ''}"><div>${day.d}</div><div class="dini">${DOW[day.dow][0]}</div></th>`).join('');
+    `<th scope="col" class="daycol${day.weekend ? ' weekend' : ''}"><div>${day.d}</div><div class="dini">${DOW[day.dow][0]}</div></th>`).join('');
 
+  const kidLabel = (k) => `${k.last_name ? k.last_name.toUpperCase() + ' ' : ''}${k.first_name}`.trim();
   const kidRows = kids.length ? kids.map((k) => {
     const cells = days.map((day) => {
       const on = present.has(k.id + '|' + day.date);
+      const lbl = `Présence de ${kidLabel(k)} le ${day.d}/${pad(CUR.m)}`;
       return `<td class="daycell${day.weekend ? ' weekend' : ''}">
-        <input type="checkbox" class="pres" data-kid="${k.id}" data-date="${day.date}" ${on ? 'checked' : ''}/></td>`;
+        <input type="checkbox" class="pres" data-kid="${k.id}" data-date="${day.date}" aria-label="${lbl.replace(/"/g, '&quot;')}" ${on ? 'checked' : ''}/></td>`;
     }).join('');
     return `<tr>
-      <td class="kidname nowrap">${k.last_name ? k.last_name.toUpperCase() + ' ' : ''}${k.first_name}
-        <button class="linkx" data-arch="${k.id}" title="Retirer de la liste">✕</button></td>
+      <th scope="row" class="kidname nowrap">${kidLabel(k)}
+        <button class="linkx" data-arch="${k.id}" aria-label="Retirer ${kidLabel(k).replace(/"/g, '&quot;')} de la liste" title="Retirer de la liste">✕</button></th>
       ${cells}
       <td class="kidtot"><strong id="kidtot_${k.id}">${kidPresentCount(k)}</strong></td>
     </tr>`;
@@ -617,9 +640,10 @@ async function viewChildren() {
       <div id="kMsg"></div>
       <p class="muted small">Cochez les jours de présence de chaque enfant. Une case décochée un jour d'ouverture = absence.</p>
       <div class="table-wrap" style="margin-top:8px"><table class="attend">
-        <thead><tr><th class="kidname">Enfant</th>${headDays}<th class="kidtot">Prés.</th></tr></thead>
+        <caption class="sr-only">Présences des enfants pour ${monthName(CUR.y, CUR.m)}. Cochez les jours de présence.</caption>
+        <thead><tr><th scope="col" class="kidname">Enfant</th>${headDays}<th scope="col" class="kidtot">Prés.</th></tr></thead>
         <tbody>${kidRows}</tbody>
-        <tfoot><tr><td class="kidname">Total / jour</td>${footCells}<td class="kidtot"><strong>${att.length}</strong></td></tr></tfoot>
+        <tfoot><tr><th scope="row" class="kidname">Total / jour</th>${footCells}<td class="kidtot"><strong>${att.length}</strong></td></tr></tfoot>
       </table></div>
       <p class="muted small">« Prés. » = nombre de jours de présence de l'enfant ce mois-ci. La moyenne annuelle est dans l'onglet 📈 Statistiques.</p>
     </div>`;
@@ -756,6 +780,7 @@ async function exportStatsPDF(stats, chartDaily, chartMonthly) {
 async function viewEmployees() {
   const app = document.getElementById('app');
   const profs = await STORE.listProfiles();
+  const allKids = await STORE.listKids(true);
   const roleLbl = (r) => (r === 'admin' ? 'Administrateur' : 'Employée');
   const rows = profs.map((p) => {
     const activeBtn = p.role === 'employee'
@@ -796,6 +821,34 @@ async function viewEmployees() {
       <p class="muted small">Les nouveaux comptes sont créés comme <strong>Employée</strong>. Le rôle admin est réservé et contrôlé.
         ${MODE === 'cloud' ? "En cloud, la création peut vous déconnecter (limite Supabase) ; reconnectez-vous si besoin." : ''}</p>
       <button id="saveEmp" style="margin-top:10px">Créer</button>
+    </div>
+    <div class="card" id="dataCard">
+      <h2>🗄️ Données &amp; confidentialité</h2>
+      <p class="muted small">Sauvegardez régulièrement vos données (protection contre une perte).
+        La purge et l'anonymisation sont <strong>irréversibles</strong>.</p>
+      <h3 style="margin-bottom:6px">Sauvegarde / export</h3>
+      <div class="row" style="flex-wrap:wrap; gap:10px">
+        <button class="small" id="expJson">⬇️ Exporter tout (JSON)</button>
+        <button class="small" id="expCsvPresta">⬇️ CSV prestations</button>
+        <button class="small" id="expCsvKids">⬇️ CSV présences enfants</button>
+      </div>
+      <h3 style="margin:16px 0 6px">Rétention (RGPD)</h3>
+      <div class="row" style="align-items:end; flex-wrap:wrap; gap:10px">
+        <div><label>Purger les présences enfants avant le 1ᵉʳ janvier</label>
+          <input id="purgeYear" type="number" min="2026" value="${CUR.y}" style="width:110px"/></div>
+        <button class="small red" id="purgeBtn">🧹 Purger</button>
+      </div>
+      <div class="row" style="align-items:end; flex-wrap:wrap; gap:10px; margin-top:12px">
+        <div><label>Anonymiser un enfant</label>
+          <select id="anonSel" style="min-width:200px">
+            <option value="">— choisir —</option>
+            ${allKids.map((k) => `<option value="${k.id}">${(k.last_name ? k.last_name.toUpperCase() + ' ' : '') + k.first_name}${k.active ? '' : ' (retiré)'}</option>`).join('')}
+          </select></div>
+        <button class="small red" id="anonBtn">🕶️ Anonymiser</button>
+      </div>
+      <p class="muted small" style="margin-top:12px">
+        📄 <a href="docs/confidentialite.md" target="_blank" rel="noopener">Note de confidentialité &amp; politique de rétention</a>
+      </p>
     </div>`;
 
   document.getElementById('addBtn').onclick = () => document.getElementById('addForm').classList.toggle('hidden');
@@ -835,6 +888,62 @@ async function viewEmployees() {
     try { await STORE.setActive(b.dataset.react, true); toast('Employée réactivée'); render(); }
     catch (e) { toast('Erreur : ' + e.message, 'error'); }
   });
+
+  // --- Données & confidentialité (export / rétention) ---
+  document.getElementById('expJson').onclick = async () => {
+    try {
+      const data = await STORE.exportAll();
+      downloadFile(`edd-sauvegarde_${todayISO()}.json`, JSON.stringify(data, null, 2), 'application/json');
+      toast('Sauvegarde JSON téléchargée');
+    } catch (e) { toast('Export impossible : ' + e.message, 'error'); }
+  };
+  document.getElementById('expCsvPresta').onclick = async () => {
+    try {
+      const data = await STORE.exportAll();
+      const nameById = {}; (data.profiles || []).forEach((p) => (nameById[p.id] = p.full_name));
+      const rows = [['Employée', 'Date', 'Prévu début', 'Prévu fin', 'Réel début', 'Réel fin', 'Presté (min)', 'Écart (min)', 'Justification']];
+      (data.day_entries || [])
+        .slice().sort((a, b) => (a.entry_date + a.employee_id).localeCompare(b.entry_date + b.employee_id))
+        .forEach((e) => {
+          const p = plannedMinutes(e), w = effectiveWorked(e);
+          rows.push([nameById[e.employee_id] || e.employee_id, e.entry_date,
+            e.planned_start || '', e.planned_end || '', e.start_time || '', e.end_time || '',
+            w, w - p, e.justification || '']);
+        });
+      downloadFile(`prestations_${todayISO()}.csv`, toCSV(rows), 'text/csv;charset=utf-8');
+      toast('CSV prestations téléchargé');
+    } catch (e) { toast('Export impossible : ' + e.message, 'error'); }
+  };
+  document.getElementById('expCsvKids').onclick = async () => {
+    try {
+      const data = await STORE.exportAll();
+      const kidById = {}; (data.kids || []).forEach((k) => (kidById[k.id] = k));
+      const rows = [['Nom', 'Prénom', 'Date de présence']];
+      (data.kid_attendance || [])
+        .slice().sort((a, b) => (a.entry_date + a.kid_id).localeCompare(b.entry_date + b.kid_id))
+        .forEach((a) => {
+          const k = kidById[a.kid_id] || {};
+          rows.push([k.last_name || '', k.first_name || '', a.entry_date]);
+        });
+      downloadFile(`presences_enfants_${todayISO()}.csv`, toCSV(rows), 'text/csv;charset=utf-8');
+      toast('CSV présences téléchargé');
+    } catch (e) { toast('Export impossible : ' + e.message, 'error'); }
+  };
+  document.getElementById('purgeBtn').onclick = async () => {
+    const year = parseInt(document.getElementById('purgeYear').value, 10);
+    if (!year || year < 2026) { toast('Année invalide.', 'error'); return; }
+    const before = `${year}-01-01`;
+    if (!confirm(`Supprimer DÉFINITIVEMENT toutes les présences enfants avant le ${before} ?\nPensez à exporter une sauvegarde avant.`)) return;
+    try { const n = await STORE.purgeKidAttendanceBefore(before); toast(`${n} présence(s) purgée(s).`); render(); }
+    catch (e) { toast('Purge impossible : ' + e.message, 'error'); }
+  };
+  document.getElementById('anonBtn').onclick = async () => {
+    const id = document.getElementById('anonSel').value;
+    if (!id) { toast('Choisissez un enfant.', 'error'); return; }
+    if (!confirm("Anonymiser cet enfant ? Son nom et prénom seront remplacés définitivement (les présences restent comptées).")) return;
+    try { await STORE.anonymizeKid(id); toast('Enfant anonymisé.'); render(); }
+    catch (e) { toast('Anonymisation impossible : ' + e.message, 'error'); }
+  };
 }
 
 /* ---------------- Logo pour les PDF (SVG → PNG dataURL, mis en cache) ---------------- */
