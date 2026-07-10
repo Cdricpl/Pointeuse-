@@ -59,9 +59,9 @@ months (statut de verrouillage par employée/mois)
 
 day_entries (prestations journalières)
   id PK · employee_id FK→profiles · entry_date
-  planned_minutes (admin) · worked_minutes (presté effectif)
-  start_time · end_time · break_minutes (encodage par plage horaire, 15 min)
-  worked_touched (bool : l'employée a encodé une plage → n'est plus pré-rempli)
+  planned_start · planned_end · planned_minutes  (horaire PRÉVU, défini par l'admin)
+  start_time · end_time · worked_minutes          (horaire RÉEL, encodé par l'employée, 15 min)
+  worked_touched (bool : l'employée a modifié le réel → n'est plus pré-rempli)
   kind('normal'|'conge'|'recuperation'|'autre') · justification · updated_at
   UNIQUE(employee_id, entry_date)
 
@@ -86,13 +86,16 @@ Le fichier SQL complet (tables, index, RLS, déclencheurs) est dans
 
 ### Encodage des prestations et pré-remplissage
 
-- Quand l'admin définit `planned_minutes`, les heures prestées sont **pré-remplies**
-  à l'identique (`worked_minutes = planned_minutes`) tant que l'employée n'a pas encodé
-  de plage horaire (`worked_touched = false`). L'employée ne modifie donc que les jours
-  qui diffèrent.
-- L'employée encode par **heure de début / fin** (tranches de 15 min) + **pause** optionnelle.
-  Le presté est calculé : `worked = end − start − break`, ce qui fixe `worked_touched = true`.
-- Un changement ultérieur de l'horaire prévu **n'écrase pas** un jour déjà encodé.
+- L'admin définit l'**horaire prévu** via `planned_start` / `planned_end` (la référence).
+  `planned_minutes = planned_end − planned_start`.
+- Tant que l'employée n'a rien modifié (`worked_touched = false`), l'**horaire réel**
+  est **pré-rempli** avec le prévu (`start_time = planned_start`, etc.). L'employée ne
+  modifie que les jours qui diffèrent.
+- L'employée modifie `start_time` / `end_time` (tranches de 15 min) → `worked_touched = true`
+  et `worked_minutes = end_time − start_time`.
+- Un changement ultérieur de l'horaire prévu **n'écrase pas** un jour déjà modifié.
+- Le champ « pause » a été retiré ; la colonne `break_minutes` reste en base par
+  compatibilité mais n'est plus utilisée.
 
 ### Calculs et report de solde
 

@@ -66,18 +66,19 @@ class DemoStore {
       const dow = new Date(y, m - 1, d).getDay();
       if (dow === 0 || dow === 6) continue; // week-end
       [e1, e2].forEach((emp, i) => {
-        const planned = 240; // 4h → 14:00–18:00
-        // Certains jours diffèrent (encodés via début/fin) ; les autres sont pré-remplis.
+        // Horaire prévu par l'admin : 14:00–18:00 (4h).
+        const pStart = '14:00', pEnd = '18:00', planned = 240;
+        // Certains jours diffèrent (horaire réel modifié) ; les autres sont pré-remplis.
         const extra = (d % 5 === 0 ? 30 : 0) - (d % 7 === 0 ? 15 : 0);
         const touched = extra !== 0;
-        const end = touched ? Util.minToTimeSafe(18 * 60 + extra) : '';
-        const start = touched ? '14:00' : '';
+        const end = touched ? Util.minToTimeSafe(18 * 60 + extra) : pEnd;
+        const start = pStart;
         const worked = touched ? planned + extra : planned;
         db.entries.push({
           id: Util.uuid(), employee_id: emp, entry_date: date,
-          planned_minutes: planned, worked_minutes: worked,
-          start_time: start, end_time: end, break_minutes: 0,
-          worked_touched: touched,
+          planned_start: pStart, planned_end: pEnd, planned_minutes: planned,
+          start_time: start, end_time: end, worked_minutes: worked,
+          break_minutes: 0, worked_touched: touched,
           kind: 'normal',
           justification: touched ? 'Activité prolongée' : '',
         });
@@ -168,12 +169,13 @@ class DemoStore {
     let e = db.entries.find(x => x.employee_id === entry.employee_id && x.entry_date === entry.entry_date);
     if (!e) {
       e = { id: Util.uuid(), employee_id: entry.employee_id, entry_date: entry.entry_date,
-            planned_minutes: 0, worked_minutes: 0, start_time: '', end_time: '',
-            break_minutes: 0, worked_touched: false, kind: 'normal', justification: '' };
+            planned_start: '', planned_end: '', planned_minutes: 0, worked_minutes: 0,
+            start_time: '', end_time: '', break_minutes: 0, worked_touched: false,
+            kind: 'normal', justification: '' };
       db.entries.push(e);
     }
-    ['planned_minutes', 'worked_minutes', 'start_time', 'end_time', 'break_minutes',
-     'worked_touched', 'kind', 'justification'].forEach(k => {
+    ['planned_start', 'planned_end', 'planned_minutes', 'worked_minutes', 'start_time',
+     'end_time', 'break_minutes', 'worked_touched', 'kind', 'justification'].forEach(k => {
       if (entry[k] !== undefined) e[k] = entry[k];
     });
     this._log(db, 'update_entry', 'day_entry', e.entry_date, { employee_id: entry.employee_id });
