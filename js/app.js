@@ -294,14 +294,26 @@ async function viewSheet() {
           patch.worked_minutes = patch.planned_minutes;
         }
       } else if (k === 'start_time' || k === 'end_time') {
-        // L'employée (ou l'admin) modifie l'horaire réel → jour marqué comme modifié.
-        const start = k === 'start_time' ? el.value : (prev.start_time || prev.planned_start || '');
-        const end = k === 'end_time' ? el.value : (prev.end_time || prev.planned_end || '');
+        // L'employée (ou l'admin) modifie l'horaire réel.
+        // On lit les DEUX sélecteurs réels de la ligne (ce qui est affiché).
+        const tr = el.closest('tr');
+        const start = tr.querySelector('select[data-k="start_time"]').value;
+        const end = tr.querySelector('select[data-k="end_time"]').value;
         const s = timeToMin(start), f = timeToMin(end);
         if (s != null && f != null && f <= s) { toast("L'heure de fin doit être après le début.", 'error'); return; }
-        patch.start_time = start; patch.end_time = end;
-        patch.worked_touched = true;
-        patch.worked_minutes = (s != null && f != null) ? Math.max(0, f - s) : 0;
+        const bothEmpty = !start && !end;
+        const differsFromPlanned = start !== (prev.planned_start || '') || end !== (prev.planned_end || '');
+        if (bothEmpty || !differsFromPlanned) {
+          // Réel effacé (--:--) ou identique au prévu → jour non « modifié » (retour au pré-rempli).
+          patch.start_time = bothEmpty ? '' : start;
+          patch.end_time = bothEmpty ? '' : end;
+          patch.worked_touched = false;
+          patch.worked_minutes = bothEmpty ? plannedMinutes(prev) : Math.max(0, (f || 0) - (s || 0));
+        } else {
+          patch.start_time = start; patch.end_time = end;
+          patch.worked_touched = true;
+          patch.worked_minutes = (s != null && f != null) ? Math.max(0, f - s) : 0;
+        }
       } else if (k === 'kind') {
         patch.kind = el.value;
       } else if (k === 'justification') {
