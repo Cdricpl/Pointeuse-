@@ -134,7 +134,7 @@ function renderLogin() {
 function buildNav() {
   const items = ME.role === 'admin'
     ? [['sheet', '📅 Feuille du mois'], ['recap', '📊 Récapitulatif'], ['children', '🧒 Enfants'],
-       ['stats', '📈 Statistiques'], ['employees', '👥 Employées'], ['audit', '📝 Journal']]
+       ['stats', '📈 Statistiques'], ['employees', '👥 Utilisateurs'], ['audit', '📝 Journal']]
     : [['sheet', '📅 Ma feuille'], ['recap', '📊 Mon récap'], ['children', '🧒 Enfants'], ['stats', '📈 Statistiques']];
   document.getElementById('nav').innerHTML = items.map(
     ([v, l]) => `<button class="navbtn ${v === VIEW ? 'active' : ''}" data-v="${v}">${l}</button>`).join('');
@@ -532,33 +532,53 @@ function isoWeek(dateStr) {
   return 1 + Math.round(((date - first) / 864e5 - 3 + ((first.getDay() + 6) % 7)) / 7);
 }
 
-/* ---------------- Vue : Employées (admin) ---------------- */
+/* ---------------- Vue : Utilisateurs (admin) ---------------- */
 async function viewEmployees() {
   const app = document.getElementById('app');
   const profs = await STORE.listProfiles();
-  const rows = profs.map((p) => `<tr>
-    <td>${p.full_name}</td><td>${p.email || '—'}</td>
-    <td><span class="badge ${p.role === 'admin' ? 'validated' : 'open'}">${p.role}</span></td>
-    <td>${p.active ? '<span class="badge validated">Active</span>' : '<span class="badge refused">Archivée</span>'}</td>
-    <td>${p.role === 'employee' ? (p.active
-        ? `<button class="small red" data-arch="${p.id}">Archiver</button>`
-        : `<button class="small green" data-react="${p.id}">Réactiver</button>`) : ''}</td>
-  </tr>`).join('');
+  const roleLbl = (r) => (r === 'admin' ? 'Administrateur' : 'Employée');
+  const rows = profs.map((p) => {
+    const isMe = p.id === ME.id;
+    const roleBtn = isMe
+      ? '<span class="muted small">(vous)</span>'
+      : `<button class="small gray" data-role-id="${p.id}" data-role-to="${p.role === 'admin' ? 'employee' : 'admin'}">
+           ${p.role === 'admin' ? '↓ Passer employée' : '↑ Passer admin'}</button>`;
+    const activeBtn = p.role === 'employee'
+      ? (p.active ? `<button class="small red" data-arch="${p.id}">Archiver</button>`
+                  : `<button class="small green" data-react="${p.id}">Réactiver</button>`)
+      : '';
+    return `<tr>
+      <td>${p.full_name}</td><td>${p.email || '—'}</td>
+      <td><span class="badge ${p.role === 'admin' ? 'validated' : 'open'}">${roleLbl(p.role)}</span></td>
+      <td>${p.active ? '<span class="badge validated">Actif</span>' : '<span class="badge refused">Archivé</span>'}</td>
+      <td class="nowrap">${roleBtn} ${activeBtn}</td>
+    </tr>`;
+  }).join('');
   app.innerHTML = `<div class="card">
-      <div class="row-between"><h2>👥 Employées</h2><button class="small" id="addBtn">+ Ajouter une employée</button></div>
+      <div class="row-between"><h2>👥 Utilisateurs</h2><button class="small" id="addBtn">+ Ajouter un utilisateur</button></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Action</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Actions</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
-      <p class="muted small">Archiver conserve toutes les données en lecture seule (l'employée ne peut plus se connecter/encoder).</p>
+      <p class="muted small">
+        « Passer admin / employée » change le rôle d'un compte existant (moyen recommandé pour créer un admin).
+        Archiver conserve les données en lecture seule.
+      </p>
     </div>
     <div class="card hidden" id="addForm">
-      <h3>Nouvelle employée</h3>
+      <h3>Nouvel utilisateur</h3>
       <div class="row">
         <div><label>Nom complet</label><input id="nName" placeholder="Prénom Nom"/></div>
         <div><label>Email</label><input id="nEmail" type="email" placeholder="prenom@ecole.be"/></div>
         <div><label>Mot de passe initial</label><input id="nPwd" placeholder="au moins 6 caractères"/></div>
+        <div><label>Rôle</label><select id="nRole">
+          <option value="employee">Employée</option>
+          <option value="admin">Administrateur</option>
+        </select></div>
       </div>
       <div id="addMsg"></div>
+      ${MODE === 'cloud' ? `<p class="muted small">En mode cloud, la création d'un compte peut vous déconnecter
+        (limite de Supabase). Astuce fiable : créez d'abord la personne comme employée, puis utilisez
+        « ↑ Passer admin » dans le tableau — cela ne vous déconnecte pas.</p>` : ''}
       <button id="saveEmp" style="margin-top:10px">Créer</button>
     </div>`;
   document.getElementById('addBtn').onclick = () => document.getElementById('addForm').classList.toggle('hidden');
@@ -566,12 +586,20 @@ async function viewEmployees() {
     const full_name = document.getElementById('nName').value.trim();
     const email = document.getElementById('nEmail').value.trim();
     const password = document.getElementById('nPwd').value;
+    const role = document.getElementById('nRole').value;
     if (!full_name || !email || password.length < 6) {
       document.getElementById('addMsg').innerHTML = '<div class="msg error">Nom, email et mot de passe (6+) requis.</div>'; return;
     }
-    try { await STORE.addProfile({ full_name, email, password, role: 'employee' }); toast('Employée ajoutée'); render(); }
+    try { await STORE.addProfile({ full_name, email, password, role }); toast(roleLbl(role) + ' ajouté(e)'); render(); }
     catch (e) { document.getElementById('addMsg').innerHTML = `<div class="msg error">${e.message}</div>`; }
   };
+  app.querySelectorAll('[data-role-id]').forEach((b) => b.onclick = async () => {
+    const to = b.dataset.roleTo;
+    if (confirm(`Changer le rôle de cet utilisateur en « ${roleLbl(to)} » ?`)) {
+      try { await STORE.setRole(b.dataset.roleId, to); toast('Rôle mis à jour'); render(); }
+      catch (e) { toast(e.message, 'error'); }
+    }
+  });
   app.querySelectorAll('[data-arch]').forEach((b) => b.onclick = async () => {
     if (confirm('Archiver cette employée ? Ses données restent consultables.')) { await STORE.setActive(b.dataset.arch, false); toast('Employée archivée'); render(); }
   });
