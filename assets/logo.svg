@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200" role="img" aria-label="Jardin Sauvage">
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7a1414"/>
+      <stop offset="1" stop-color="#a83232"/>
+    </linearGradient>
+  </defs>
+  <!-- Tronc + racines -->
+  <path d="M150 150 C148 120 152 100 155 78 M155 78 C154 60 156 48 158 40"
+        fill="none" stroke="url(#ink)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M150 150 C130 158 110 160 92 168 M150 150 C170 158 192 159 210 166 M150 150 C145 165 143 178 140 190 M150 150 C158 166 162 178 166 190"
+        fill="none" stroke="url(#ink)" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Branches -->
+  <g fill="none" stroke="url(#ink)" stroke-linecap="round">
+    <path d="M155 92 C138 84 120 82 104 72 M120 82 C112 74 108 66 100 60 M104 72 C96 70 88 70 80 66" stroke-width="3.2"/>
+    <path d="M156 88 C176 80 196 78 214 68 M196 78 C204 70 210 62 220 58 M214 68 C224 66 232 66 240 60" stroke-width="3.2"/>
+    <path d="M157 66 C146 56 134 50 124 40 M158 64 C170 54 182 48 194 40 M157 58 C154 46 152 36 152 26" stroke-width="2.6"/>
+    <path d="M150 100 C132 96 116 98 100 92 M158 100 C178 96 196 98 212 92" stroke-width="2.4"/>
+  </g>
+  <!-- Éclaboussures d'encre (feuillage sauvage) -->
+  <g fill="#a83232" opacity="0.85">
+    <circle cx="90" cy="60" r="2.6"/><circle cx="78" cy="70" r="1.8"/><circle cx="112" cy="50" r="2.2"/>
+    <circle cx="128" cy="38" r="2.4"/><circle cx="150" cy="24" r="2.8"/><circle cx="172" cy="36" r="2.2"/>
+    <circle cx="200" cy="42" r="2.6"/><circle cx="224" cy="56" r="2.4"/><circle cx="240" cy="60" r="1.9"/>
+    <circle cx="66" cy="76" r="1.6"/><circle cx="250" cy="70" r="1.6"/><circle cx="140" cy="30" r="1.5"/>
+  </g>
+  <!-- Texte -->
+  <text x="160" y="184" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif"
+        font-style="italic" font-size="26" fill="#7a1414" font-weight="600">Jardin Sauvage</text>
+</svg>

@@ -1,4 +1,4 @@
-# 🏫 École des devoirs — Application de gestion
+# 🌳 EDD Jardin Sauvage — Application de gestion
 
 Outil web **centralisé et responsive** pour gérer une école des devoirs :
 horaires mensuels, encodage des prestations, calcul automatique des soldes (heures
@@ -55,13 +55,16 @@ pré-remplies pour visualiser les récaps et les graphiques.
 
 ## ✨ Fonctionnalités
 
-- **Horaires (admin)** : définition des heures à prester par jour dans un tableau
-  mensuel type Excel ; verrouillage / déverrouillage / validation d'un mois.
-- **Prestations (employées)** : encodage par **heure de début / fin** (tranches de 15 min)
-  avec **pause** optionnelle ; le presté et l'écart sont calculés automatiquement.
-  Les jours sont **pré-remplis** avec l'horaire prévu — l'employée ne modifie que les
-  jours différents, et un changement d'horaire n'écrase pas une saisie déjà faite.
-  Justification obligatoire en cas d'écart.
+- **Horaires prévus (admin)** : l'admin définit, par jour, une **heure de début** et une
+  **heure de fin** prévues (tranches de 15 min), dans un tableau mensuel type Excel ;
+  verrouillage / déverrouillage / validation d'un mois.
+- **Prestations (employées)** : l'employée voit l'horaire prévu et ne modifie que
+  l'**heure de début / fin réelle** (tranches de 15 min) ; le presté et l'écart sont
+  calculés automatiquement. Les jours sont **pré-remplis** avec l'horaire prévu — on ne
+  modifie que les jours différents, et un changement d'horaire n'écrase pas une saisie
+  déjà faite. Justification obligatoire en cas d'écart.
+- **Identité visuelle** : logo (accueil, entête, PDF) et **code couleur par rôle**
+  (administrateur = bleu, employée = vert) ; jours modifiés et écarts (+/−) mis en évidence.
 - **Calculs automatiques** : écart journalier, totaux mensuels, **solde reporté de mois
   en mois**, heures supplémentaires et heures à récupérer.
 - **Verrouillage** : un mois verrouillé n'est plus modifiable par l'employée (seul
@@ -81,7 +84,8 @@ pré-remplies pour visualiser les récaps et les graphiques.
 ```
 .
 ├── index.html            # Shell de l'application (SPA)
-├── css/styles.css        # Styles (responsive)
+├── assets/logo.svg       # Logo (accueil, entête, PDF)
+├── css/styles.css        # Styles (responsive, couleurs par rôle)
 ├── js/
 │   ├── config.js         # Clés Supabase (vide = mode démo)
 │   ├── store.js          # Couche de données : démo (localStorage) OU Supabase
@@ -92,6 +96,13 @@ pré-remplies pour visualiser les récaps et les graphiques.
 │   └── ARCHITECTURE.md   # Proposition d'architecture + schéma de BDD + écrans
 └── README.md
 ```
+
+### 🖼️ Remplacer le logo par le vrai
+Le logo est le fichier **`assets/logo.svg`**. Pour mettre le logo officiel de l'école :
+remplace simplement ce fichier par ton image (garde le nom `logo.svg`), **ou** dépose
+ton image (ex. `logo.png`) dans `assets/` et remplace `assets/logo.svg` par
+`assets/logo.png` dans `index.html` et `js/app.js` (recherche `logo.svg`). Il apparaîtra
+automatiquement sur l'accueil, dans l'entête et dans les PDF.
 
 ---
 

@@ -27,11 +27,18 @@ function timeSelect(k, date, value, disabled) {
     .concat(TIME_OPTIONS.map((t) => `<option value="${t}" ${t === value ? 'selected' : ''}>${t}</option>`));
   return `<select class="cell time" data-k="${k}" data-date="${date}" ${disabled ? 'disabled' : ''}>${opts.join('')}</select>`;
 }
-// Heures prestées effectives d'une entrée (calculées depuis début/fin/pause,
-// ou valeur pré-remplie si l'employée n'a pas encore encodé de plage horaire).
+// Heures PRÉVUES : durée définie par l'admin via heure de début/fin prévue.
+function plannedMinutes(e) {
+  const s = timeToMin(e.planned_start), f = timeToMin(e.planned_end);
+  if (s != null && f != null) return Math.max(0, f - s);
+  return e.planned_minutes || 0; // compat anciennes données
+}
+// Heures PRESTÉES effectives : calculées depuis début/fin réels ; si l'employée
+// n'a rien modifié, on retombe sur l'horaire prévu (pré-remplissage).
 function effectiveWorked(e) {
   const s = timeToMin(e.start_time), f = timeToMin(e.end_time);
-  if (s != null && f != null) return Math.max(0, f - s - (e.break_minutes || 0));
+  if (s != null && f != null) return Math.max(0, f - s);
+  if (!e.worked_touched) return plannedMinutes(e);
   return e.worked_minutes || 0;
 }
 function fmtHM(min) {
@@ -51,9 +58,9 @@ async function monthSummary(empId, y, m) {
   const firstOfMonth = `${y}-${pad(m)}-01`;
   let planned = 0, worked = 0, carryIn = 0;
   all.forEach((e) => {
-    const w = effectiveWorked(e);
-    if (e.entry_date < firstOfMonth) carryIn += (w - e.planned_minutes);
-    else if (e.entry_date.startsWith(`${y}-${pad(m)}`)) { planned += e.planned_minutes; worked += w; }
+    const w = effectiveWorked(e), p = plannedMinutes(e);
+    if (e.entry_date < firstOfMonth) carryIn += (w - p);
+    else if (e.entry_date.startsWith(`${y}-${pad(m)}`)) { planned += p; worked += w; }
   });
   const delta = worked - planned;
   return { planned, worked, delta, carryIn, closing: carryIn + delta };
@@ -82,6 +89,7 @@ async function afterLogin() {
     SEL_EMP = firstEmp ? firstEmp.id : ME.id;
   }
   VIEW = 'sheet';
+  document.body.dataset.role = ME.role;   // thème couleur : admin=bleu, employée=vert
   document.getElementById('login').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   document.getElementById('meName').textContent = ME.full_name + (ME.role === 'admin' ? ' (Admin)' : '');
@@ -94,14 +102,16 @@ function renderLogin() {
   document.getElementById('appShell').style.display = 'none';
   const el = document.getElementById('login');
   el.style.display = 'flex';
+  document.body.removeAttribute('data-role');
   el.innerHTML = `
     <div class="card login-card">
-      <h1>🏫 École des devoirs</h1>
+      <img src="assets/logo.svg" alt="Jardin Sauvage" class="logo-login" />
+      <h1>EDD Jardin Sauvage</h1>
       <p class="muted">Gestion des horaires, prestations et présences</p>
       <label>Email</label>
-      <input id="email" type="email" value="admin@ecole.be" />
+      <input id="email" type="email" value="${MODE === 'demo' ? 'admin@ecole.be' : ''}" placeholder="votre email" />
       <label>Mot de passe</label>
-      <input id="pwd" type="password" value="admin123" />
+      <input id="pwd" type="password" value="${MODE === 'demo' ? 'admin123' : ''}" placeholder="votre mot de passe" />
       <div id="loginMsg"></div>
       <button class="big" id="loginBtn">Se connecter</button>
       ${MODE === 'demo' ? `<p class="muted small" style="margin-top:14px">
@@ -185,19 +195,24 @@ async function viewSheet() {
   for (let d = 1; d <= dim; d++) {
     const date = `${CUR.y}-${pad(CUR.m)}-${pad(d)}`;
     const dow = new Date(CUR.y, CUR.m - 1, d).getDay();
-    const e = byDate[date] || { planned_minutes: 0, worked_minutes: 0, start_time: '', end_time: '', break_minutes: 0, kind: 'normal', justification: '' };
+    const e = byDate[date] || { planned_start: '', planned_end: '', start_time: '', end_time: '', worked_touched: false, kind: 'normal', justification: '' };
+    const planned = plannedMinutes(e);
     const worked = effectiveWorked(e);
-    const delta = worked - e.planned_minutes;
+    const delta = worked - planned;
+    const modified = !!e.worked_touched;
     const needJustif = delta !== 0 && (e.kind === 'normal' || e.kind === 'autre') && !e.justification;
     if (needJustif) warnings++;
-    const weekend = (dow === 0 || dow === 6) ? ' class="weekend"' : '';
-    rows += `<tr${weekend} ${needJustif ? 'data-warn="1"' : ''}>
-      <td class="nowrap">${pad(d)}/${pad(CUR.m)}</td>
+    // Valeurs réelles affichées : par défaut = prévu (pré-remplissage) si non modifié.
+    const realStart = e.start_time || (!modified ? (e.planned_start || '') : '');
+    const realEnd = e.end_time || (!modified ? (e.planned_end || '') : '');
+    const cls = [(dow === 0 || dow === 6) ? 'weekend' : '', modified ? 'modified' : ''].filter(Boolean).join(' ');
+    rows += `<tr${cls ? ` class="${cls}"` : ''}>
+      <td class="nowrap">${pad(d)}/${pad(CUR.m)}${modified ? ' <span class="dot" title="Jour modifié">●</span>' : ''}</td>
       <td>${DOW[dow]}</td>
-      <td><input class="cell" data-k="planned" data-date="${date}" value="${e.planned_minutes ? minToHoursInput(e.planned_minutes) : ''}" ${canEditPlanned ? '' : 'disabled'} placeholder="0"/></td>
-      <td>${timeSelect('start_time', date, e.start_time || '', !canEditWorked)}</td>
-      <td>${timeSelect('end_time', date, e.end_time || '', !canEditWorked)}</td>
-      <td><input class="cell" style="width:56px" data-k="break_minutes" data-date="${date}" type="number" min="0" step="15" value="${e.break_minutes || ''}" ${canEditWorked ? '' : 'disabled'} placeholder="0"/></td>
+      <td class="grp-plan">${timeSelect('planned_start', date, e.planned_start || '', !canEditPlanned)}</td>
+      <td class="grp-plan">${timeSelect('planned_end', date, e.planned_end || '', !canEditPlanned)}</td>
+      <td class="grp-real">${timeSelect('start_time', date, realStart, !canEditWorked)}</td>
+      <td class="grp-real">${timeSelect('end_time', date, realEnd, !canEditWorked)}</td>
       <td class="nowrap"><strong>${worked ? fmtHM(worked) : '—'}</strong></td>
       <td><select class="cell" data-k="kind" data-date="${date}" ${canEditWorked ? '' : 'disabled'}>
         ${Object.entries(KINDS).map(([k, l]) => `<option value="${k}" ${e.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
@@ -226,20 +241,35 @@ async function viewSheet() {
         ? '<div class="msg">Ce mois est ' + (month.status === 'locked' ? 'verrouillé' : 'validé') + ' : vous ne pouvez plus le modifier.</div>' : ''}
       <div class="table-wrap">
         <table class="grid">
-          <thead><tr><th>Date</th><th>Jour</th><th>À prester</th><th>Début</th><th>Fin</th><th>Pause</th><th>Presté</th><th>Type</th><th>Écart</th><th>Justification</th></tr></thead>
+          <thead>
+            <tr>
+              <th rowspan="2">Date</th><th rowspan="2">Jour</th>
+              <th colspan="2" class="grp-plan-h">Horaire prévu (admin)</th>
+              <th colspan="2" class="grp-real-h">Horaire réel</th>
+              <th rowspan="2">Presté</th><th rowspan="2">Type</th><th rowspan="2">Écart</th><th rowspan="2">Justification</th>
+            </tr>
+            <tr>
+              <th class="grp-plan-h">Début</th><th class="grp-plan-h">Fin</th>
+              <th class="grp-real-h">Début</th><th class="grp-real-h">Fin</th>
+            </tr>
+          </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
       <div class="stat-grid" style="margin-top:16px">
-        <div class="stat"><div class="num">${fmtHM(sum.planned)}</div><div class="lbl">Total à prester</div></div>
+        <div class="stat"><div class="num">${fmtHM(sum.planned)}</div><div class="lbl">Total prévu</div></div>
         <div class="stat"><div class="num">${fmtHM(sum.worked)}</div><div class="lbl">Total presté</div></div>
         <div class="stat"><div class="num ${sum.delta >= 0 ? 'pos' : 'neg'}">${fmtHM(sum.delta)}</div><div class="lbl">Écart du mois</div></div>
         <div class="stat"><div class="num">${fmtHM(sum.carryIn)}</div><div class="lbl">Solde reporté</div></div>
         <div class="stat"><div class="num ${sum.closing >= 0 ? 'pos' : 'neg'}">${fmtHM(sum.closing)}</div><div class="lbl">Solde cumulé</div></div>
       </div>
-      <p class="muted small">« À prester » en heures décimales (4 = 4h, 4.5 = 4h30). Le presté est calculé
-      depuis Début/Fin (par tranches de 15 min), pause déduite. Les jours sont pré-remplis
-      comme prévu : ne modifiez que ceux qui diffèrent. Enregistrement automatique.</p>
+      <p class="muted small">
+        <span class="legend"><span class="sw grp-plan-h"></span> Horaire prévu (défini par l'admin)</span>
+        <span class="legend"><span class="sw grp-real-h"></span> Horaire réel (encodé par l'employée)</span>
+        <span class="legend"><span class="dot">●</span> jour modifié</span>
+        <span class="legend"><span class="pos">▲ heures sup.</span> / <span class="neg">▼ à récupérer</span></span><br>
+        Heures par tranches de 15 min. Le réel est pré-rempli avec le prévu : ne modifiez que les jours différents. Enregistrement automatique.
+      </p>
     </div>`;
   wireToolbar();
 
@@ -250,27 +280,32 @@ async function viewSheet() {
       const prev = byDate[date] || {};
       const patch = { employee_id: empId, entry_date: date };
 
-      if (k === 'planned') {
-        patch.planned_minutes = hoursToMin(el.value);
-        // Pré-remplissage : si l'employée n'a pas encore encodé de plage horaire,
-        // les heures prestées suivent l'horaire prévu (sans écraser une saisie existante).
-        if (!prev.worked_touched && !prev.start_time && !prev.end_time) {
+      if (k === 'planned_start' || k === 'planned_end') {
+        // L'admin définit l'horaire prévu (référence).
+        const ps = k === 'planned_start' ? el.value : (prev.planned_start || '');
+        const pe = k === 'planned_end' ? el.value : (prev.planned_end || '');
+        patch.planned_start = ps; patch.planned_end = pe;
+        const s = timeToMin(ps), f = timeToMin(pe);
+        if (s != null && f != null && f <= s) { toast("L'heure de fin doit être après le début.", 'error'); return; }
+        patch.planned_minutes = (s != null && f != null) ? Math.max(0, f - s) : 0;
+        // Pré-remplissage : tant que l'employée n'a pas modifié, le réel suit le prévu.
+        if (!prev.worked_touched) {
+          patch.start_time = ps; patch.end_time = pe;
           patch.worked_minutes = patch.planned_minutes;
         }
+      } else if (k === 'start_time' || k === 'end_time') {
+        // L'employée (ou l'admin) modifie l'horaire réel → jour marqué comme modifié.
+        const start = k === 'start_time' ? el.value : (prev.start_time || prev.planned_start || '');
+        const end = k === 'end_time' ? el.value : (prev.end_time || prev.planned_end || '');
+        const s = timeToMin(start), f = timeToMin(end);
+        if (s != null && f != null && f <= s) { toast("L'heure de fin doit être après le début.", 'error'); return; }
+        patch.start_time = start; patch.end_time = end;
+        patch.worked_touched = true;
+        patch.worked_minutes = (s != null && f != null) ? Math.max(0, f - s) : 0;
       } else if (k === 'kind') {
         patch.kind = el.value;
       } else if (k === 'justification') {
         patch.justification = el.value;
-      } else if (k === 'start_time' || k === 'end_time' || k === 'break_minutes') {
-        // Encodage réel d'une plage horaire → marque le jour comme modifié.
-        const start = k === 'start_time' ? el.value : (prev.start_time || '');
-        const end = k === 'end_time' ? el.value : (prev.end_time || '');
-        const brk = k === 'break_minutes' ? Number(el.value || 0) : Number(prev.break_minutes || 0);
-        patch.start_time = start; patch.end_time = end; patch.break_minutes = brk;
-        patch.worked_touched = true;
-        const s = timeToMin(start), f = timeToMin(end);
-        patch.worked_minutes = (s != null && f != null) ? Math.max(0, f - s - brk) : 0;
-        if (s != null && f != null && f <= s) { toast("L'heure de fin doit être après le début.", 'error'); return; }
       }
       try { await STORE.upsertEntry(patch); render(); }
       catch (e) { toast(e.message, 'error'); }
@@ -315,7 +350,7 @@ async function viewRecap() {
     <div class="card">
       <h2>Récapitulatif — ${monthName(CUR.y, CUR.m)}</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>Employée</th><th>À prester</th><th>Presté</th><th>Écart mois</th><th>Solde reporté</th><th>Solde cumulé</th><th>Statut</th></tr></thead>
+        <thead><tr><th>Employée</th><th>Prévu</th><th>Presté</th><th>Écart mois</th><th>Solde reporté</th><th>Solde cumulé</th><th>Statut</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <p class="muted small">Le solde cumulé = solde reporté + écart du mois. Un solde positif = heures supplémentaires ; négatif = heures à récupérer.</p>
     </div>`;
@@ -434,7 +469,7 @@ async function exportStatsPDF(stats, chartDaily, chartMonthly) {
   // Repli impression si jsPDF absent (hors ligne).
   if (!window.jspdf) {
     const w = window.open('', '_blank');
-    w.document.write(`<h2>Statistiques de fréquentation — ${monthName(CUR.y, CUR.m)}</h2>
+    w.document.write(`<img src="assets/logo.svg" style="height:60px"><h2>Statistiques de fréquentation — ${monthName(CUR.y, CUR.m)}</h2>
       <ul>
         <li>Moyenne hebdomadaire (mois) : <b>${stats.weeklyAvg.toFixed(0)}</b></li>
         <li>Moyenne journalière (mois) : <b>${stats.dailyMonth.toFixed(1)}</b></li>
@@ -447,13 +482,11 @@ async function exportStatsPDF(stats, chartDaily, chartMonthly) {
   }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  doc.setFontSize(16); doc.text('Statistiques de fréquentation', 14, 18);
-  doc.setFontSize(11); doc.setTextColor(90);
-  doc.text(`École des devoirs · ${monthName(CUR.y, CUR.m)} · Année ${CUR.y}`, 14, 25);
+  let y = await pdfHeader(doc, 'Statistiques de fréquentation', `${monthName(CUR.y, CUR.m)} · Année ${CUR.y}`);
 
   // Tableau des moyennes
   doc.autoTable({
-    startY: 32,
+    startY: y,
     head: [['Indicateur', 'Valeur']],
     body: [
       ['Moyenne hebdomadaire (mois)', stats.weeklyAvg.toFixed(0) + ' enfants'],
@@ -462,7 +495,7 @@ async function exportStatsPDF(stats, chartDaily, chartMonthly) {
     ],
     styles: { fontSize: 11 }, headStyles: { fillColor: [59, 91, 219] },
   });
-  let y = doc.lastAutoTable.finalY + 10;
+  y = doc.lastAutoTable.finalY + 10;
 
   // Graphiques (rendus en images depuis les canvases Chart.js)
   const W = 180;
@@ -549,7 +582,36 @@ async function viewAudit() {
   </div>`;
 }
 
-/* ---------------- Export PDF ---------------- */
+/* ---------------- Logo pour les PDF (SVG → PNG dataURL, mis en cache) ---------------- */
+let _logoCache;
+function logoDataURL() {
+  if (_logoCache !== undefined) return Promise.resolve(_logoCache);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth || 320; c.height = img.naturalHeight || 200;
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        _logoCache = { url: c.toDataURL('image/png'), w: c.width, h: c.height };
+      } catch { _logoCache = null; }
+      resolve(_logoCache);
+    };
+    img.onerror = () => { _logoCache = null; resolve(null); };
+    img.src = 'assets/logo.svg';
+  });
+}
+// En-tête commun des PDF : logo + titre.
+async function pdfHeader(doc, title, subtitle) {
+  const logo = await logoDataURL();
+  if (logo) { const h = 18, w = h * (logo.w / logo.h); doc.addImage(logo.url, 'PNG', 14, 10, w, h); }
+  doc.setFontSize(16); doc.setTextColor(0); doc.text('EDD Jardin Sauvage', 14, 36);
+  doc.setFontSize(13); doc.setTextColor(40); doc.text(title, 14, 44);
+  if (subtitle) { doc.setFontSize(10); doc.setTextColor(110); doc.text(subtitle, 14, 50); }
+  return 56; // ordonnée de départ pour la suite
+}
+
+/* ---------------- Export PDF : fiche de prestations ---------------- */
 async function exportSheetPDF(empId) {
   const prof = await currentEmpProfile(empId);
   const entries = await STORE.entriesForMonth(empId, CUR.y, CUR.m);
@@ -560,17 +622,18 @@ async function exportSheetPDF(empId) {
   for (let d = 1; d <= dim; d++) {
     const date = `${CUR.y}-${pad(CUR.m)}-${pad(d)}`;
     const e = byDate[date]; if (!e) continue;
-    const worked = effectiveWorked(e);
-    if (!e.planned_minutes && !worked) continue;
-    body.push([`${pad(d)}/${pad(CUR.m)}`, fmtHM(e.planned_minutes),
+    const planned = plannedMinutes(e), worked = effectiveWorked(e);
+    if (!planned && !worked) continue;
+    body.push([`${pad(d)}/${pad(CUR.m)}`,
+      e.planned_start || '—', e.planned_end || '—',
       e.start_time || '—', e.end_time || '—', fmtHM(worked),
-      KINDS[e.kind], fmtHM(worked - e.planned_minutes), e.justification || '']);
+      KINDS[e.kind], fmtHM(worked - planned), e.justification || '']);
   }
 
   if (!window.jspdf) { // fallback impression
     const w = window.open('', '_blank');
-    w.document.write(`<h2>Prestations — ${prof.full_name} — ${monthName(CUR.y, CUR.m)}</h2>
-      <table border=1 cellpadding=5 style="border-collapse:collapse"><tr><th>Date</th><th>À prester</th><th>Début</th><th>Fin</th><th>Presté</th><th>Type</th><th>Écart</th><th>Justif.</th></tr>
+    w.document.write(`<img src="assets/logo.svg" style="height:60px"><h2>Prestations — ${prof.full_name} — ${monthName(CUR.y, CUR.m)}</h2>
+      <table border=1 cellpadding=5 style="border-collapse:collapse"><tr><th>Date</th><th>Prévu début</th><th>Prévu fin</th><th>Réel début</th><th>Réel fin</th><th>Presté</th><th>Type</th><th>Écart</th><th>Justif.</th></tr>
       ${body.map((r) => '<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>').join('')}</table>
       <p><b>Total presté:</b> ${fmtHM(sum.worked)} — <b>Solde cumulé:</b> ${fmtHM(sum.closing)}</p>
       <button onclick="print()">Imprimer</button>`);
@@ -578,15 +641,15 @@ async function exportSheetPDF(empId) {
   }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  doc.setFontSize(15); doc.text(`Prestations — ${prof.full_name}`, 14, 18);
-  doc.setFontSize(11); doc.setTextColor(90); doc.text(`${monthName(CUR.y, CUR.m)} · École des devoirs`, 14, 25);
+  const startY = await pdfHeader(doc, `Prestations — ${prof.full_name}`, monthName(CUR.y, CUR.m));
   doc.autoTable({
-    startY: 32, head: [['Date', 'À prester', 'Début', 'Fin', 'Presté', 'Type', 'Écart', 'Justification']], body,
-    styles: { fontSize: 9 }, headStyles: { fillColor: [59, 91, 219] },
+    startY,
+    head: [['Date', 'Prévu déb.', 'Prévu fin', 'Réel déb.', 'Réel fin', 'Presté', 'Type', 'Écart', 'Justification']],
+    body, styles: { fontSize: 9 }, headStyles: { fillColor: [59, 91, 219] },
   });
   let y = doc.lastAutoTable.finalY + 10;
   doc.setFontSize(11); doc.setTextColor(0);
-  doc.text(`Total à prester : ${fmtHM(sum.planned)}      Total presté : ${fmtHM(sum.worked)}`, 14, y);
+  doc.text(`Total prévu : ${fmtHM(sum.planned)}      Total presté : ${fmtHM(sum.worked)}`, 14, y);
   doc.text(`Écart du mois : ${fmtHM(sum.delta)}      Solde reporté : ${fmtHM(sum.carryIn)}      Solde cumulé : ${fmtHM(sum.closing)}`, 14, y + 7);
   doc.text('Signature employée : ______________        Signature responsable : ______________', 14, y + 24);
   doc.save(`prestations_${prof.full_name.replace(/\s/g, '_')}_${CUR.y}-${pad(CUR.m)}.pdf`);

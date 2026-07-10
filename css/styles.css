@@ -3,7 +3,15 @@
   --green:#2f9e44; --red:#e03131; --orange:#f08c00; --gray:#868e96;
   --border:#dee2e6; --text:#212529; --shadow:0 2px 8px rgba(0,0,0,.08);
   --pos:#2b8a3e; --neg:#c92a2a;
+  --plan:#1e5bd6; --plan-bg:#eaf1ff; --real:#1f9d51; --real-bg:#e9f9ee;
 }
+/* Code couleur par rôle : administrateur = bleu, employée = vert. */
+body[data-role="admin"]    { --primary:#1e5bd6; --primary-dark:#1746a8; }
+body[data-role="employee"] { --primary:#1f9d51; --primary-dark:#177a3e; }
+
+/* Logo */
+.logo-header { height:34px; width:auto; border-radius:6px; background:#fff; padding:2px 4px; }
+.logo-login { display:block; margin:0 auto 10px; max-width:180px; height:auto; }
 * { box-sizing:border-box; }
 body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
 
@@ -56,6 +64,21 @@ th { background:#f1f3f5; position:sticky; top:0; }
 .grid input.cell.wide { width:100%; min-width:120px; text-align:left; }
 .grid select.cell { border:none; padding:6px; }
 .grid select.cell.time { width:78px; }
+
+/* Groupes de colonnes prévu / réel */
+.grid thead th.grp-plan-h { background:var(--plan-bg); color:var(--plan); }
+.grid thead th.grp-real-h { background:var(--real-bg); color:var(--real); }
+.grid td.grp-plan { background:#f5f9ff; }
+.grid td.grp-real { background:#f4fdf7; }
+/* Jour modifié : mis en évidence */
+.grid tr.modified td { background:#fffbea; }
+.grid tr.modified td:first-child { box-shadow:inset 3px 0 0 var(--orange); }
+.dot { color:var(--orange); font-size:11px; }
+/* Légende */
+.legend { display:inline-block; margin:2px 14px 2px 0; }
+.legend .sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:middle; margin-right:5px; }
+.legend .sw.grp-plan-h { background:var(--plan-bg); border:1px solid var(--plan); }
+.legend .sw.grp-real-h { background:var(--real-bg); border:1px solid var(--real); }
 .grid input.cell:focus, .grid select.cell:focus { outline:2px solid var(--primary); border-radius:4px; }
 .grid input.cell.err { background:#fff0f0; outline:2px solid var(--red); }
 .grid input.cell:disabled, .grid select.cell:disabled { background:#f8f9fa; color:#495057; }
