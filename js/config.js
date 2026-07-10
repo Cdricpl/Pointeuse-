@@ -14,6 +14,6 @@
  * ------------------------------------------------------------------ */
 
 window.APP_CONFIG = {
-  SUPABASE_URL: '',       // ex: 'https://xxxxxxxx.supabase.co'
-  SUPABASE_ANON_KEY: '',  // ex: 'eyJhbGciOi...'
+  SUPABASE_URL: 'https://sbuwxpecmsglbkeiaikz.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidXd4cGVjbXNnbGJrZWlhaWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2NDkzMTcsImV4cCI6MjA5OTIyNTMxN30.-_YtmodUzMCbVPHzYGT6sdyLro86mK1pqBEg8QcCN-c',
 };
