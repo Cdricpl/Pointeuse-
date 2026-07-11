@@ -80,6 +80,14 @@ function toCSV(rows) {
   return '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n'); // BOM = accents OK dans Excel
 }
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+// Sauvegarde complète (JSON) — partagée par la carte « Données » et le bouton 💾 de l'entête.
+async function backupJSON() {
+  try {
+    const data = await STORE.exportAll();
+    downloadFile(`edd-sauvegarde_${todayISO()}.json`, JSON.stringify(data, null, 2), 'application/json');
+    toast('Sauvegarde JSON téléchargée');
+  } catch (e) { toast('Export impossible : ' + e.message, 'error'); }
+}
 
 /* ---------------- Calculs mensuels + solde reporté ---------------- */
 async function monthSummary(empId, y, m) {
@@ -132,6 +140,10 @@ async function afterLogin() {
   loginEl.innerHTML = '';   // retire le champ mot de passe du DOM (sinon le mobile propose de l'enregistrer en boucle)
   document.getElementById('appShell').style.display = 'block';
   document.getElementById('meName').textContent = ME.full_name + (ME.role === 'admin' ? ' (Admin)' : '');
+  // Bouton de sauvegarde rapide dans l'entête (accessible partout) — admin uniquement.
+  const backupBtn = document.getElementById('backupBtn');
+  if (ME.role === 'admin') { backupBtn.style.display = ''; backupBtn.onclick = () => backupJSON(); }
+  else { backupBtn.style.display = 'none'; }
   buildNav();
   render();
 }
@@ -905,13 +917,7 @@ async function viewEmployees() {
   });
 
   // --- Données & confidentialité (export / restauration / rétention) ---
-  document.getElementById('expJson').onclick = async () => {
-    try {
-      const data = await STORE.exportAll();
-      downloadFile(`edd-sauvegarde_${todayISO()}.json`, JSON.stringify(data, null, 2), 'application/json');
-      toast('Sauvegarde JSON téléchargée');
-    } catch (e) { toast('Export impossible : ' + e.message, 'error'); }
-  };
+  document.getElementById('expJson').onclick = () => backupJSON();
   document.getElementById('impBtn').onclick = async () => {
     const f = document.getElementById('impFile').files[0];
     if (!f) { toast('Choisissez d\'abord un fichier de sauvegarde.', 'error'); return; }

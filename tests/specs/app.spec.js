@@ -77,6 +77,17 @@ test('sauvegarde : l’export JSON déclenche un téléchargement', async ({ pag
   expect(download.suggestedFilename()).toContain('edd-sauvegarde');
 });
 
+test('entête : le bouton 💾 déclenche une sauvegarde (admin)', async ({ page }) => {
+  await loginAdmin(page);
+  const backup = page.locator('#backupBtn');
+  await expect(backup).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    backup.click(),
+  ]);
+  expect(download.suggestedFilename()).toContain('edd-sauvegarde');
+});
+
 test('règle métier : le mois précédent est bloqué en janvier 2026', async ({ page }) => {
   await loginAdmin(page);
   await page.locator('.navbtn[data-v="sheet"]').click();
